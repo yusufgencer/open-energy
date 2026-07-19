@@ -1,0 +1,39 @@
+# Data (DuckDB + Parquet) — repoya girmez
+data/
+# Exception: frontend app routes that happen to include 'data' in path
+!frontend/
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+
+# Model artefaktları
+*.pkl
+*.joblib
+models_store/
+catboost_info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Internal planning documents (keep local, never publish)
+docs/superpowers/plans/
+docs/TASKS-*.md

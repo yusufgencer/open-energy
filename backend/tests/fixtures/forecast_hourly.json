@@ -1,0 +1,8 @@
+{
+  "latitude": 39.9, "longitude": 32.8, "timezone": "GMT",
+  "hourly": {
+    "time": ["2024-06-01T00:00", "2024-06-01T01:00"],
+    "wind_speed_100m": [7.2, 8.1],
+    "temperature_2m": [15.0, 14.6]
+  }
+}
