@@ -26,6 +26,8 @@ class StackingModel(ModelWrapper):
         self._model: StackingRegressor | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        if self._fit_constant_target(y):
+            return
         X = np.nan_to_num(np.asarray(X, dtype=float))
         estimators = [
             (
@@ -61,6 +63,9 @@ class StackingModel(ModelWrapper):
         ).fit(X, y)
 
     def predict(self, X: np.ndarray) -> Prediction:
+        constant = self._constant_prediction(X)
+        if constant is not None:
+            return constant
         assert self._model is not None
         X = np.nan_to_num(np.asarray(X, dtype=float))
         return Prediction(p50=self._model.predict(X))

@@ -29,6 +29,8 @@ class QuantileGBMModel(ModelWrapper):
         self._hi: GradientBoostingRegressor | None = None
 
     def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        if self._fit_constant_target(y):
+            return
         X = np.nan_to_num(np.asarray(X, dtype=float))
         self._p50 = GradientBoostingRegressor(loss="squared_error", **self.params).fit(
             X, y, sample_weight=sample_weight
@@ -42,6 +44,9 @@ class QuantileGBMModel(ModelWrapper):
         )
 
     def predict(self, X: np.ndarray) -> Prediction:
+        constant = self._constant_prediction(X, with_bands=True)
+        if constant is not None:
+            return constant
         assert self._p50 is not None and self._lo is not None and self._hi is not None
         X = np.nan_to_num(np.asarray(X, dtype=float))
         return enforce_quantile_order(

@@ -17,6 +17,13 @@ import type {
   WeatherIngestBody,
   ChampionRow,
   PolicyLeaderboardRow,
+  DriftStatus,
+  FleetHealthRow,
+  QueuedJob,
+  DriftCheckBody,
+  RetrainBody,
+  ReforecastBody,
+  PostprocessorFitBody,
 } from "./types";
 
 const apiBase = (): string =>
@@ -84,6 +91,10 @@ export async function startExperiment(
 
 export async function getJob(id: number): Promise<Job> {
   return request<Job>(`${apiBase()}/jobs/${id}`);
+}
+
+export async function listJobs(limit = 50): Promise<Job[]> {
+  return request<Job[]>(`${apiBase()}/jobs?limit=${limit}`);
 }
 
 export async function getResults(experimentId: number): Promise<TrialResult[]> {
@@ -154,6 +165,41 @@ export async function health(): Promise<{ status: string }> {
 
 export async function listPlants(): Promise<Plant[]> {
   return request<Plant[]>(`${apiBase()}/plants`);
+}
+
+export async function getFleetHealth(): Promise<FleetHealthRow[]> {
+  return request<FleetHealthRow[]>(`${apiBase()}/fleet/health`);
+}
+
+export async function getDrift(plantId: string): Promise<DriftStatus[]> {
+  return request<DriftStatus[]>(`${apiBase()}/plants/${plantId}/drift`);
+}
+
+function operationalPost<T>(plantId: string, path: string, body: T): Promise<QueuedJob> {
+  return request<QueuedJob>(`${apiBase()}/plants/${plantId}/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function startDriftCheck(plantId: string, body: DriftCheckBody): Promise<QueuedJob> {
+  return operationalPost(plantId, "drift/check", body);
+}
+
+export function startRetrain(plantId: string, body: RetrainBody): Promise<QueuedJob> {
+  return operationalPost(plantId, "retrain", body);
+}
+
+export function startReforecast(plantId: string, body: ReforecastBody): Promise<QueuedJob> {
+  return operationalPost(plantId, "reforecast", body);
+}
+
+export function startPostprocessorFit(
+  plantId: string,
+  body: PostprocessorFitBody
+): Promise<QueuedJob> {
+  return operationalPost(plantId, "postprocessor/fit", body);
 }
 
 // ── EPİAŞ entegrasyonu ────────────────────────────────────────────────────────

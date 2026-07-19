@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { WindIcon, SunIcon, ArrowRightIcon } from "lucide-react";
+import { WindIcon, SunIcon, ArrowRightIcon, ActivityIcon } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/empty";
 import { listPlants } from "@/lib/api";
 import CreatePlantDialog from "@/components/create-plant-dialog";
-import { cn } from "@/lib/utils";
 import type { Plant } from "@/lib/types";
 
 function PlantCard({ plant }: { plant: Plant }) {
@@ -88,7 +87,12 @@ export default async function PlantsPage() {
                 : "Henüz santral yok"}
             </p>
           </div>
-          <CreatePlantDialog />
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/fleet"><ActivityIcon data-icon /> Filo Sağlığı</Link>
+            </Button>
+            <CreatePlantDialog />
+          </div>
         </div>
 
         {fetchError && (

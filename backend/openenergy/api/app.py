@@ -27,7 +27,7 @@ from openenergy.ingestion.grid import generate_grid, list_grid_points
 from openenergy.ingestion.production import load_production_csv, write_production
 from openenergy.integrations import epias_store
 from openenergy.jobs.runner import (
-    create_job, enqueue_emergency_retrain, get_job,
+    create_job, enqueue_emergency_retrain, get_job, list_jobs,
 )
 from openenergy.retraining.drift import check_drift, drift_status
 from openenergy.providers.epias.client import EpiasAuthError
@@ -249,6 +249,71 @@ def create_app(
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/fleet/health")
+    def fleet_health() -> list[dict]:
+        """Compact, query-only health matrix for every registered plant."""
+        rows = db().execute(
+            """
+            SELECT p.plant_id, p.name, p.kind, p.capacity_mw,
+                   (SELECT max(f.issue_time) FROM forecasts f
+                    WHERE f.plant_id=p.plant_id) AS latest_forecast_at,
+                   (SELECT max(pr.ts) FROM production pr
+                    WHERE pr.plant_id=p.plant_id) AS latest_production_at,
+                   CASE
+                     WHEN EXISTS (
+                       SELECT 1 FROM drift_events de
+                       WHERE de.plant_id=p.plant_id
+                         AND de.detector_status IN ('stale','missing','breach','drift')
+                     ) THEN 'critical'
+                     WHEN EXISTS (
+                       SELECT 1 FROM drift_state ds
+                       WHERE ds.plant_id=p.plant_id
+                         AND (ds.fired OR ds.consecutive_breaches > 0)
+                     ) THEN 'critical'
+                     WHEN EXISTS (
+                       SELECT 1 FROM drift_events de
+                       WHERE de.plant_id=p.plant_id
+                         AND de.detector_status IN ('warning','insufficient_data')
+                     ) THEN 'warning'
+                     WHEN EXISTS (
+                       SELECT 1 FROM drift_events de
+                       WHERE de.plant_id=p.plant_id AND de.detector_status='ok'
+                     ) THEN 'healthy'
+                     ELSE 'unknown'
+                   END AS drift_status,
+                   (SELECT count(*) FROM jobs j
+                    WHERE json_extract_string(j.payload, '$.plant_id')=p.plant_id
+                      AND j.status IN ('pending','running','failed')) AS active_jobs
+            FROM plants p
+            ORDER BY p.name, p.plant_id
+            """
+        ).fetchall()
+        payload = []
+        for row in rows:
+            drift = str(row[6])
+            latest_forecast = row[4]
+            latest_production = row[5]
+            if drift == "critical":
+                status = "critical"
+            elif drift == "warning":
+                status = "warning"
+            elif drift == "healthy" and latest_forecast is not None and latest_production is not None:
+                status = "healthy"
+            else:
+                status = "unknown"
+            payload.append({
+                "plant_id": row[0], "name": row[1], "kind": row[2],
+                "capacity_mw": float(row[3]), "status": status,
+                "latest_forecast_at": (
+                    None if latest_forecast is None else str(latest_forecast)
+                ),
+                "latest_production_at": (
+                    None if latest_production is None else str(latest_production)
+                ),
+                "drift_status": drift, "active_jobs": int(row[7]),
+            })
+        return payload
 
     # ── Plants ──────────────────────────────────────────────────────────────────
 
@@ -632,6 +697,13 @@ def create_app(
             )
         return {"results": results}
 
+    @app.get("/jobs")
+    def list_jobs_endpoint(limit: int = 50) -> list[dict]:
+        try:
+            return list_jobs(db(), limit=limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
     @app.get("/jobs/{job_id}")
     def get_job_endpoint(job_id: int) -> dict:
         j = get_job(db(), job_id)
@@ -778,6 +850,17 @@ def create_app(
         if horizon is not None:
             query += " AND horizon_hours=?"
             params.append(horizon)
+            query += (
+                " AND issue_time=(SELECT max(f2.issue_time) FROM forecasts f2 "
+                "WHERE f2.plant_id=? AND f2.horizon_hours=?)"
+            )
+            params.extend([plant_id, horizon])
+        else:
+            query += (
+                " AND issue_time=(SELECT max(f2.issue_time) FROM forecasts f2 "
+                "WHERE f2.plant_id=? AND f2.horizon_hours=forecasts.horizon_hours)"
+            )
+            params.append(plant_id)
         query += " ORDER BY valid_time"
         rows = db().execute(query, params).fetchall()
         cols = ["plant_id", "point_id", "horizon_hours", "issue_time", "valid_time",

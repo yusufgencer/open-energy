@@ -27,6 +27,79 @@ export interface Job {
   progress: number;
   detail: string | null;
   created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+  last_error?: string | null;
+  payload?: Record<string, unknown>;
+}
+
+export interface QueuedJob {
+  job_id: number;
+  status: string;
+}
+
+export interface DriftStatus {
+  plant_id: string;
+  horizon_hours: number;
+  breaching: boolean;
+  fired?: boolean;
+  consecutive_breaches?: number;
+  recent_nrmse?: number | null;
+  champion_nrmse?: number | null;
+  ratio?: number | null;
+  last_job_id?: number | null;
+  last_window?: string | null;
+  updated_at?: string | null;
+  detector_status?: string | null;
+  covariate_status?: string | null;
+}
+
+export interface FleetHealthRow {
+  plant_id: string;
+  name: string;
+  kind: PlantKind;
+  capacity_mw: number;
+  status: "healthy" | "warning" | "critical" | "unknown";
+  latest_forecast_at: string | null;
+  latest_production_at: string | null;
+  drift_status: string;
+  active_jobs: number;
+}
+
+export interface DriftCheckBody {
+  point_id: number;
+  horizons: number[];
+  kind: PlantKind;
+  capacity_mw?: number;
+  nwp_sources?: string[];
+  n_trials?: number;
+}
+
+export interface RetrainBody {
+  plant_id: string;
+  point_id: number;
+  horizons: number[];
+  kind: PlantKind;
+  capacity_mw: number;
+  nwp_sources?: string[];
+  n_trials?: number;
+}
+
+export interface ReforecastBody {
+  point_id: number;
+  horizon_hours: number;
+  kind: PlantKind;
+  capacity_mw?: number;
+  issue_time?: string;
+  w_new?: number;
+}
+
+export interface PostprocessorFitBody {
+  horizons: number[];
+  degree?: number;
+  alpha?: number;
+  min_samples?: number;
+  lookback_days?: number;
 }
 
 export interface TrialResult {

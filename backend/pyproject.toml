@@ -22,8 +22,13 @@ dependencies = [
     "pvlib>=0.15.2",
 ]
 
+[project.scripts]
+openenergy-mutation-gate = "openenergy.testing.mutation_gate:main"
+
 [dependency-groups]
 dev = [
+    "hypothesis>=6.135",
+    "mutmut>=3.6,<4",
     "pytest>=8.0",
     "respx>=0.21",
     "ruff>=0.6",
@@ -36,6 +41,18 @@ addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 100
+
+[tool.mutmut]
+# Keep the default mutation run focused on the numerical target transform.  The
+# slower database/serving contracts still run in pytest, while this allowlist
+# keeps the mutation feedback loop comfortably below ten minutes.
+source_paths = ["openenergy/features/target.py"]
+pytest_add_cli_args_test_selection = ["tests/features/test_target.py"]
+also_copy = ["openenergy/"]
+max_stack_depth = 8
+timeout_constant = 1.0
+timeout_multiplier = 5.0
+use_setproctitle = false
 
 [build-system]
 requires = ["hatchling"]

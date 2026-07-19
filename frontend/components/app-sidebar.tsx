@@ -6,6 +6,8 @@ import {
   FlaskConicalIcon,
   TrendingUpIcon,
   BuildingIcon,
+  ActivityIcon,
+  ListChecksIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -37,6 +39,7 @@ const plantNavItems: PlantNavItem[] = [
   { label: "Geçmiş Veri", href: (id) => `/plants/${id}/data`, icon: DatabaseIcon },
   { label: "Experiment'ler", href: (id) => `/plants/${id}/experiments`, icon: FlaskConicalIcon },
   { label: "Forecast'ler", href: (id) => `/plants/${id}/forecasts`, icon: TrendingUpIcon },
+  { label: "Drift & İzleme", href: (id) => `/plants/${id}/monitoring`, icon: ActivityIcon },
 ];
 
 interface AppSidebarProps {
@@ -69,6 +72,29 @@ export default async function AppSidebar({ activePlantId }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Operasyon</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/fleet">
+                    <BuildingIcon className="size-4" />
+                    <span>Filo Sağlığı</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/jobs">
+                    <ListChecksIcon className="size-4" />
+                    <span>İş Merkezi</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         {activePlantId ? (
           <SidebarGroup>
             <SidebarGroupLabel>Santral</SidebarGroupLabel>

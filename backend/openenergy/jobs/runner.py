@@ -603,3 +603,28 @@ def get_job(con: duckdb.DuckDBPyConnection, job_id: int) -> dict[str, Any] | Non
     ):
         job[key] = None if job[key] is None else str(job[key])
     return job
+
+
+def list_jobs(
+    con: duckdb.DuckDBPyConnection, *, limit: int = 50
+) -> list[dict[str, Any]]:
+    """Return the newest durable jobs first for the operational Job Center."""
+    if limit < 1 or limit > 200:
+        raise ValueError("limit must be between 1 and 200")
+    rows = con.execute(
+        f"""
+        SELECT {_JOB_COLUMNS}
+        FROM jobs
+        ORDER BY created_at DESC, job_id DESC
+        LIMIT ?
+        """,
+        [int(limit)],
+    ).fetchall()
+    jobs = [_row_to_job(row) for row in rows]
+    for job in jobs:
+        for key in (
+            "available_at", "lease_until", "heartbeat_at", "started_at",
+            "completed_at", "updated_at", "created_at",
+        ):
+            job[key] = None if job[key] is None else str(job[key])
+    return jobs

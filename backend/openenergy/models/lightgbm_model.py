@@ -19,6 +19,8 @@ class LightGBMModel(ModelWrapper):
         self._hi = None
 
     def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        if self._fit_constant_target(y):
+            return
         X = np.nan_to_num(np.asarray(X, dtype=float))
         self._p50 = LGBMRegressor(objective="regression", **self.params).fit(
             X, y, sample_weight=sample_weight
@@ -32,6 +34,9 @@ class LightGBMModel(ModelWrapper):
         )
 
     def predict(self, X: np.ndarray) -> Prediction:
+        constant = self._constant_prediction(X, with_bands=True)
+        if constant is not None:
+            return constant
         X = np.nan_to_num(np.asarray(X, dtype=float))
         return enforce_quantile_order(
             Prediction(p50=self._p50.predict(X), p10=self._lo.predict(X), p90=self._hi.predict(X))

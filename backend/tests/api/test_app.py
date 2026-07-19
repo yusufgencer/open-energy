@@ -21,6 +21,28 @@ def test_health():
     assert client.get("/health").json()["status"] == "ok"
 
 
+def test_fleet_health_shape():
+    client, con = _client()
+    create_plant(con, Plant(plant_id="wf1", name="WF", kind="wind", capacity_mw=10))
+
+    response = client.get("/fleet/health")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "plant_id": "wf1",
+            "name": "WF",
+            "kind": "wind",
+            "capacity_mw": 10.0,
+            "status": "unknown",
+            "latest_forecast_at": None,
+            "latest_production_at": None,
+            "drift_status": "unknown",
+            "active_jobs": 0,
+        }
+    ]
+
+
 def test_scheduler_lifespan_is_opt_in_and_shuts_down(monkeypatch, db):
     scheduler = type(
         "FakeScheduler",
@@ -461,6 +483,29 @@ def test_get_forecasts_empty():
     r = client.get("/plants/wf1/forecasts?horizon=24")
     assert r.status_code == 200
     assert r.json() == []
+
+
+def test_get_forecasts_returns_only_latest_issue_trajectory():
+    client, con = _client()
+    create_plant(con, Plant(plant_id="wf1", name="WF", kind="wind", capacity_mw=10))
+    for issue, p50 in (
+        ("2026-01-01 00:00:00", 1.0),
+        ("2026-01-02 00:00:00", 2.0),
+    ):
+        con.execute(
+            """
+            INSERT INTO forecasts
+              (plant_id, point_id, horizon_hours, issue_time, valid_time, p10, p50, p90)
+            VALUES ('wf1', 1, 24, ?, ?::TIMESTAMP + INTERVAL 24 HOUR, 0, ?, 3)
+            """,
+            [issue, issue, p50],
+        )
+
+    rows = client.get("/plants/wf1/forecasts?horizon=24").json()
+
+    assert len(rows) == 1
+    assert rows[0]["issue_time"].startswith("2026-01-02")
+    assert rows[0]["p50"] == 2.0
 
 
 def _seed_drift(con, *, degraded_err, n=80):

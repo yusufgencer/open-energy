@@ -205,3 +205,66 @@ def test_optional_boosters_predict_p50(model_cls, params):
     pred = m.predict(X[90:])
     assert pred.p50.shape == (30,)
     assert pred.p10 is None
+
+
+@pytest.mark.parametrize(
+    ("model", "has_band"),
+    [
+        (RidgeModel(alpha=0.1), False),
+        (
+            LightGBMModel(
+                params={"n_estimators": 10, "num_leaves": 3, "verbose": -1},
+                quantiles=(0.1, 0.9),
+            ),
+            True,
+        ),
+        (
+            QuantileGBMModel(
+                params={"n_estimators": 10, "max_depth": 2, "learning_rate": 0.05},
+            ),
+            True,
+        ),
+        (
+            RandomForestModel(
+                params={"n_estimators": 10, "random_state": 42, "n_jobs": 1},
+            ),
+            True,
+        ),
+        (
+            StackingModel(
+                params={"rf_n_estimators": 5, "gb_n_estimators": 5, "n_jobs": 1},
+            ),
+            False,
+        ),
+        (
+            XGBoostModel(
+                params={"n_estimators": 10, "max_depth": 2, "n_jobs": 1},
+            ),
+            False,
+        ),
+        (
+            CatBoostModel(
+                params={"iterations": 10, "depth": 2, "verbose": False},
+                quantiles=(0.1, 0.9),
+            ),
+            True,
+        ),
+    ],
+)
+def test_all_model_families_serve_constant_target_deterministically(model, has_band):
+    """Degenerate folds are valid data, not a failed model trial."""
+    if model.family in {"xgboost", "catboost"}:
+        pytest.importorskip(model.family)
+    X = np.arange(36, dtype=float).reshape(12, 3)
+    y = np.full(12, 0.375)
+
+    model.fit(X, y)
+    pred = model.predict(np.array([[100.0, -5.0, np.nan], [0.0, 2.0, 9.0]]))
+
+    assert np.array_equal(pred.p50, np.array([0.375, 0.375]))
+    if has_band:
+        assert np.array_equal(pred.p10, pred.p50)
+        assert np.array_equal(pred.p90, pred.p50)
+    else:
+        assert pred.p10 is None
+        assert pred.p90 is None

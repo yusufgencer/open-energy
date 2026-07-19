@@ -8,6 +8,7 @@ import {
   DatabaseIcon,
   FlaskConicalIcon,
   TrendingUpIcon,
+  ActivityIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,11 @@ export default function PlantNav({ plantId }: Props) {
       label: "Forecast'ler",
       href: `/plants/${plantId}/forecasts`,
       icon: TrendingUpIcon,
+    },
+    {
+      label: "Drift & İzleme",
+      href: `/plants/${plantId}/monitoring`,
+      icon: ActivityIcon,
     },
   ];
 

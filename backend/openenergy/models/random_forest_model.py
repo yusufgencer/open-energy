@@ -44,6 +44,8 @@ class RandomForestModel(ModelWrapper):
         self._leaf_map: list[dict[int, tuple[np.ndarray, int]]] = []
 
     def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        if self._fit_constant_target(y):
+            return
         X = np.nan_to_num(np.asarray(X, dtype=float))
         y = np.asarray(y, dtype=float)
         self._model = RandomForestRegressor(**self.params).fit(X, y, sample_weight=sample_weight)
@@ -64,6 +66,9 @@ class RandomForestModel(ModelWrapper):
             self._leaf_map.append(tree_map)
 
     def predict(self, X: np.ndarray) -> Prediction:
+        constant = self._constant_prediction(X, with_bands=True)
+        if constant is not None:
+            return constant
         assert self._model is not None and self._y_train is not None
         X = np.nan_to_num(np.asarray(X, dtype=float))
         p50 = self._model.predict(X)

@@ -56,6 +56,16 @@ def test_get_job_returns_none_for_unknown(db):
     assert get_job(db, 99999) is None
 
 
+def test_list_jobs_orders_desc_and_limits(db):
+    from openenergy.jobs.runner import create_job, list_jobs
+
+    ids = [create_job(db, f"kind-{index}") for index in range(4)]
+
+    jobs = list_jobs(db, limit=2)
+
+    assert [job["job_id"] for job in jobs] == list(reversed(ids[-2:]))
+
+
 def test_job_return_value_stored_in_detail(db):
     from openenergy.jobs.runner import create_job, run_job, get_job
     jid = create_job(db, "experiment", "initial")

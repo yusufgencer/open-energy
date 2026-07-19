@@ -11,6 +11,13 @@ import {
   ingestWeather,
   getExperimentChampion,
   getPolicyLeaderboard,
+  getDrift,
+  getFleetHealth,
+  listJobs,
+  startDriftCheck,
+  startRetrain,
+  startReforecast,
+  startPostprocessorFit,
 } from "../lib/api";
 
 beforeEach(() => { (global as any).fetch = vi.fn(); });
@@ -129,4 +136,35 @@ it("getPolicyLeaderboard omits filters when not given", async () => {
   const [url] = (global.fetch as any).mock.calls[0];
   expect(url).toContain("/plants/wf1/policy-leaderboard");
   expect(url).not.toContain("?");
+});
+
+describe("operational API clients", () => {
+  it("gets fleet health, plant drift, and the bounded job center", async () => {
+    (global.fetch as any).mockResolvedValue({ ok: true, json: async () => [] });
+
+    await getFleetHealth();
+    await getDrift("wf1");
+    await listJobs(25);
+
+    expect((global.fetch as any).mock.calls[0][0]).toContain("/fleet/health");
+    expect((global.fetch as any).mock.calls[1][0]).toContain("/plants/wf1/drift");
+    expect((global.fetch as any).mock.calls[2][0]).toContain("/jobs?limit=25");
+  });
+
+  it.each([
+    ["startDriftCheck", startDriftCheck, "/plants/wf1/drift/check", { point_id: 7, horizons: [24], kind: "wind" }],
+    ["startRetrain", startRetrain, "/plants/wf1/retrain", { plant_id: "wf1", point_id: 7, horizons: [24], kind: "wind", capacity_mw: 10 }],
+    ["startReforecast", startReforecast, "/plants/wf1/reforecast", { point_id: 7, horizon_hours: 24, kind: "wind" }],
+    ["startPostprocessorFit", startPostprocessorFit, "/plants/wf1/postprocessor/fit", { horizons: [24] }],
+  ])("%s POSTs its body to the operational endpoint", async (_name, fn, path, body) => {
+    (global.fetch as any).mockResolvedValue({ ok: true, json: async () => ({ job_id: 9, status: "pending" }) });
+
+    const result = await fn("wf1", body as never);
+    const [url, opts] = (global.fetch as any).mock.calls[0];
+
+    expect(url).toContain(path);
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual(body);
+    expect(result.job_id).toBe(9);
+  });
 });

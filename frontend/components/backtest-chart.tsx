@@ -16,6 +16,9 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyMedia, EmptyDescription } from "@/
 import { HistoryIcon } from "lucide-react";
 import { getBacktest } from "@/lib/api";
 import type { BacktestRow, PlantKind } from "@/lib/types";
+import { reliabilityPoints } from "@/lib/calibration";
+
+export { reliabilityPoints } from "@/lib/calibration";
 
 const ACCENT: Record<PlantKind, string> = {
   wind: "#0EA5E9",
@@ -50,11 +53,10 @@ export default function BacktestChart({ plantId, horizon, kind }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     getBacktest(plantId, horizon)
       .then((r) => {
         setRows(r);
+        setError(null);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -241,7 +243,55 @@ export function BacktestView({ rows, kind }: { rows: BacktestRow[]; kind: PlantK
           </span>
         )}
       </div>
+      <CalibrationPanel rows={rows} accent={accent} />
     </div>
+  );
+}
+
+function CalibrationPanel({ rows, accent }: { rows: BacktestRow[]; accent: string }) {
+  const points = useMemo(() => reliabilityPoints(rows), [rows]);
+  if (points.length === 0) return null;
+
+  return (
+    <section className="mt-2 rounded-xl border p-4" aria-labelledby="calibration-title">
+      <div className="mb-3">
+        <h3 id="calibration-title" className="text-sm font-semibold">Kalibrasyon</h3>
+        <p className="text-xs text-muted-foreground">
+          Nominal olasılık ile test penceresinde gözlenen sıklık karşılaştırması.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+        <svg viewBox="0 0 120 120" className="aspect-square w-full max-w-44" role="img" aria-label="Reliability diagram">
+          <line x1="14" y1="106" x2="106" y2="14" stroke="var(--muted-foreground)" strokeDasharray="4 3" />
+          <line x1="14" y1="106" x2="106" y2="106" stroke="var(--border)" />
+          <line x1="14" y1="106" x2="14" y2="14" stroke="var(--border)" />
+          {points.slice(0, 2).map((point) => (
+            <circle key={point.label} cx={14 + point.nominal * 92} cy={106 - point.observed * 92} r="4" fill={accent} />
+          ))}
+          <text x="60" y="119" textAnchor="middle" fontSize="8" fill="var(--muted-foreground)">Nominal</text>
+          <text x="5" y="60" textAnchor="middle" fontSize="8" fill="var(--muted-foreground)" transform="rotate(-90 5 60)">Gözlenen</text>
+        </svg>
+        <div className="flex flex-col justify-center gap-3">
+          {points.map((point) => {
+            const delta = point.observed - point.nominal;
+            return (
+              <div key={point.label}>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span>{point.label}</span>
+                  <span className="num text-muted-foreground">
+                    {(point.observed * 100).toFixed(0)}% / {(point.nominal * 100).toFixed(0)}%
+                    {" "}({delta >= 0 ? "+" : ""}{(delta * 100).toFixed(1)} puan)
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, point.observed * 100)}%`, backgroundColor: accent }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 

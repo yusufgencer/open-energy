@@ -29,6 +29,8 @@ class CatBoostModel(ModelWrapper):
         self._model = None
 
     def fit(self, X: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        if self._fit_constant_target(y):
+            return
         try:
             from catboost import CatBoostRegressor
         except ImportError as exc:
@@ -45,6 +47,9 @@ class CatBoostModel(ModelWrapper):
         self._model = CatBoostRegressor(**params).fit(X, y, sample_weight=sample_weight)
 
     def predict(self, X: np.ndarray) -> Prediction:
+        constant = self._constant_prediction(X, with_bands=self.quantiles is not None)
+        if constant is not None:
+            return constant
         assert self._model is not None
         X = np.nan_to_num(np.asarray(X, dtype=float))
         raw = np.asarray(self._model.predict(X), dtype=float)

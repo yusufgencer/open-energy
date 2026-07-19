@@ -342,7 +342,7 @@ class _ConstModel:
         )
 
 
-def test_serving_matches_offline_ensemble_on_mixed_kpv(db, tmp_path):
+def test_mixed_target_policy_ensemble_serves_in_mw_space(db, tmp_path):
     """T-01: a champion whose ensemble mixes a kpv candidate (predicts the
     clear-sky ratio ŷ') and a capacity_norm candidate (predicts normalized power ŷ)
     must be combined in a COMMON space. The correct served p50 is the mean of each
@@ -352,21 +352,24 @@ def test_serving_matches_offline_ensemble_on_mixed_kpv(db, tmp_path):
     """
     from types import SimpleNamespace
 
-    from openenergy.experiments.persistence import get_champion_strategy_model
-    from openenergy.experiments.strategy import FittedCandidate, StrategyArtifact
+    from openenergy.experiments.persistence import (
+        create_experiment,
+        mark_strategy_champion,
+        promote_strategy_champion,
+        record_strategy_trial,
+    )
+    from openenergy.experiments.search_space import PipelineConfig
+    from openenergy.experiments.strategy import (
+        FittedCandidate,
+        StrategyArtifact,
+        StrategyConfig,
+    )
     from openenergy.features.target import PlantGeometry, kpv_inverse
     from openenergy.physics.solar import clear_sky_power
 
     capacity = 10.0
     lat, lon, tilt, az = 39.9, 32.8, 5.0, 180.0
     _populate_solar(db, lat=lat, lon=lon)
-    run_experiment(db, plant_id="sf1", point_id=7, horizon_hours_list=[24],
-                   capacity_mw=capacity, kind="solar", nwp_sources=["icon"],
-                   n_trials=3, n_splits=3, embargo=24, seed=42, models_dir=tmp_path)
-    champ = get_champion_strategy_model(db, "sf1", 24)
-    assert champ is not None and champ["artifact_path"]
-    real = StrategyArtifact.load(champ["artifact_path"])
-    ref = real.candidates[0]  # reuse real feature blocks/names so forecast_matrix runs
 
     kpv_ratio, cap_norm = 0.8, 0.1
     geom = PlantGeometry(lat=lat, lon=lon, tilt=tilt, azimuth=az)
@@ -375,8 +378,8 @@ def test_serving_matches_offline_ensemble_on_mixed_kpv(db, tmp_path):
         return FittedCandidate(
             config=SimpleNamespace(target_policy=target_policy, point_policy="single_point"),
             model=_ConstModel(val),
-            feature_blocks=ref.feature_blocks,
-            feature_names=ref.feature_names,
+            feature_blocks=[],
+            feature_names=["temperature_2m"],
             cv_nrmse=0.1,
         )
 
@@ -386,7 +389,32 @@ def test_serving_matches_offline_ensemble_on_mixed_kpv(db, tmp_path):
         target_policy="capacity_norm",  # runner: mixed ensembles fall back to capacity_norm
         geometry=geom,
     )
-    mixed.save(champ["artifact_path"])
+    artifact_path = tmp_path / "mixed-target-policy.pkl"
+    mixed.save(artifact_path)
+
+    pipeline = PipelineConfig(
+        model_family="ridge",
+        nwp_source="best_match",
+        feature_blocks=[],
+        params={"alpha": 1.0},
+    )
+    experiment_id = create_experiment(db, "sf1", [24])
+    strategy_trial_id = record_strategy_trial(
+        db,
+        experiment_id=experiment_id,
+        horizon_hours=24,
+        strategy_config=StrategyConfig(
+            candidates=[pipeline, pipeline],
+            ensemble_method="mean",
+            top_k=2,
+        ),
+        cv_nrmse=0.1,
+        test_metrics={"nrmse": 0.1},
+        skill_score=0.1,
+        artifact_path=str(artifact_path),
+    )
+    mark_strategy_champion(db, experiment_id, 24, strategy_trial_id)
+    promote_strategy_champion(db, "sf1", 24, strategy_trial_id)
 
     # issue+24h = 2024-06-21 06:00 UTC → ~09:00 local → daytime ramp, 0 < P_cs < capacity
     issue = dt.datetime(2024, 6, 20, 6, 0)

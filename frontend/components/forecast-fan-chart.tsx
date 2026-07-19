@@ -35,14 +35,14 @@ interface Props {
 }
 
 interface ChartRow {
-  time: string;
+  time: number;
   p10: number;
   p50: number;
   p90: number;
 }
 
-function formatTime(isoTime: string): string {
-  const d = new Date(isoTime);
+function formatTime(value: string | number): string {
+  const d = new Date(value);
   const dd = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   return `${dd} ${hh}:00`;
@@ -94,22 +94,28 @@ function FanTooltip({
 
 export default function ForecastFanChart({ plantId, horizon, kind }: Props) {
   const [data, setData] = useState<ChartRow[]>([]);
+  const [issueTime, setIssueTime] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     getForecasts(plantId, horizon)
       .then((rows: ForecastRow[]) => {
+        const latestIssue = rows.reduce(
+          (latest, row) => row.issue_time > latest ? row.issue_time : latest,
+          ""
+        );
+        const trajectory = rows.filter((row) => row.issue_time === latestIssue);
         setData(
-          rows.map((r) => ({
-            time: formatTime(r.valid_time),
+          trajectory.map((r) => ({
+            time: new Date(r.valid_time).getTime(),
             p10: r.p10,
             p50: r.p50,
             p90: r.p90,
           }))
         );
+        setIssueTime(latestIssue ? new Date(latestIssue).getTime() : null);
+        setError(null);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -146,15 +152,21 @@ export default function ForecastFanChart({ plantId, horizon, kind }: Props) {
     );
   }
 
-  return <FanChartView data={data} kind={kind} />;
+  return <FanChartView data={data} kind={kind} issueTime={issueTime} />;
 }
 
 /** Saf sunum bileşeni — veri çekmeden p10/p50/p90 fan grafiğini çizer. */
-export function FanChartView({ data, kind }: { data: ChartRow[]; kind: PlantKind }) {
+export function FanChartView({
+  data,
+  kind,
+  issueTime,
+}: {
+  data: ChartRow[];
+  kind: PlantKind;
+  issueTime: number | null;
+}) {
   const accent = ACCENT[kind];
   const gradientId = `fanGradient-${kind}`;
-  // "Şimdi" çizgisi: tüm seri ileriye dönük tahmin olduğundan ilk zaman damgasında.
-  const nowLabel = data[0]?.time;
 
   return (
     <div className="flex flex-col gap-2">
@@ -170,6 +182,10 @@ export function FanChartView({ data, kind }: { data: ChartRow[]; kind: PlantKind
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="time"
+            type="number"
+            scale="time"
+            domain={[issueTime ?? "dataMin", "dataMax"]}
+            tickFormatter={formatTime}
             tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
@@ -194,8 +210,7 @@ export function FanChartView({ data, kind }: { data: ChartRow[]; kind: PlantKind
             content={({ active, label, payload }) => (
               <FanTooltip
                 active={active}
-                label={label as string}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                label={formatTime(label as number)}
                 row={(payload?.[0]?.payload as ChartRow) ?? undefined}
                 accent={accent}
               />
@@ -203,9 +218,9 @@ export function FanChartView({ data, kind }: { data: ChartRow[]; kind: PlantKind
           />
 
           {/* "Şimdi" referans çizgisi — tahmin başlangıcı */}
-          {nowLabel && (
+          {issueTime != null && (
             <ReferenceLine
-              x={nowLabel}
+              x={issueTime}
               stroke="var(--muted-foreground)"
               strokeDasharray="4 3"
               strokeWidth={1}

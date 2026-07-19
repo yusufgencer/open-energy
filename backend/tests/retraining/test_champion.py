@@ -229,7 +229,7 @@ def test_pointer_is_single_source_of_truth(db, tmp_path):
     assert served is not None and served["strategy_trial_id"] == pointer_id
 
 
-def test_defend_leaves_incumbent_served(db, tmp_path):
+def test_defend_keeps_incumbent_on_serving_path(db, tmp_path):
     """T-05: a rejected challenger must NOT reach the serving path. After a defend
     (unbeatable incumbent), the served strategy champion stays the incumbent — the
     Diebold-Mariano gate is no longer a no-op on the forecast path."""

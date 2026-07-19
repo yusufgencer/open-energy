@@ -34,6 +34,36 @@ def enforce_quantile_order(pred: Prediction) -> Prediction:
 class ModelWrapper(ABC):
     family: str = "base"
 
+    def _fit_constant_target(self, y: np.ndarray) -> bool:
+        """Record a degenerate training target and skip the underlying estimator.
+
+        Constant folds occur naturally for night-time solar production and very
+        short validation windows.  Treating them as a valid constant predictor
+        keeps every model family deterministic and avoids estimator-specific
+        failures (notably CatBoost's "All train targets are equal" error).
+        """
+        values = np.asarray(y, dtype=float).reshape(-1)
+        self._constant_target = (
+            float(values[0])
+            if values.size > 0 and np.all(values == values[0])
+            else None
+        )
+        return self._constant_target is not None
+
+    def _constant_prediction(
+        self,
+        X: np.ndarray,
+        *,
+        with_bands: bool = False,
+    ) -> Prediction | None:
+        value = getattr(self, "_constant_target", None)
+        if value is None:
+            return None
+        p50 = np.full(len(X), value, dtype=float)
+        if with_bands:
+            return Prediction(p50=p50, p10=p50.copy(), p90=p50.copy())
+        return Prediction(p50=p50)
+
     @abstractmethod
     def fit(
         self,
